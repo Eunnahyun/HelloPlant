@@ -5,11 +5,15 @@ import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
+import androidx.loader.content.AsyncTaskLoader;
 
 import android.Manifest;
+import android.app.AsyncNotedAppOp;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.res.AssetManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -17,6 +21,7 @@ import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import android.media.ExifInterface;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
@@ -25,6 +30,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.os.Looper;
 import android.provider.MediaStore;
 import android.view.MenuItem;
 import android.view.View;
@@ -33,6 +39,13 @@ import android.widget.ImageView;
 import android.widget.PopupMenu;
 import android.widget.Toast;
 
+import com.android.volley.AuthFailureError;
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.StringRequest;
+import com.android.volley.toolbox.Volley;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.target.SimpleTarget;
 import com.bumptech.glide.request.transition.Transition;
@@ -45,15 +58,18 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.net.MalformedURLException;
 import java.net.ProtocolException;
+import java.net.SocketTimeoutException;
 import java.security.Permission;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Locale;
 
 import java.io.FileInputStream;
@@ -62,6 +78,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Base64;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 import org.jetbrains.annotations.NotNull;
@@ -87,7 +104,7 @@ import javax.xml.xpath.XPathFactory;
 import static android.os.Environment.DIRECTORY_PICTURES;
 
 public class searchPlant extends BottomNavigationActivity {
-
+    public static JSONObject test_json = new JSONObject();
     private static final int REQUEST_IMAGE_CAPTURE = 672;
     private static final int REQUEST_GALLERY = 682;
     private String imageFilePath;
@@ -100,6 +117,7 @@ public class searchPlant extends BottomNavigationActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_search_plant);
 
@@ -199,147 +217,189 @@ public class searchPlant extends BottomNavigationActivity {
             @RequiresApi(api = Build.VERSION_CODES.O)
             @Override
             public void onClick(View v) {
+                String plantDatas = "";
+                for (int q = 176; q <= 200; q++) {
+                    test_json= null;
+                    RequestQueue requestQueue;
+
 //                String apiKey = "nQljT3UMscsIaE5YapywR1oTs96TrCzw2V9fdzqegI6j5mvxAw";
-                String apiKey = "g5AkSeLBbiQjfWUK45AhmNu6e07gvLlCxXCzov0ZeEzOYq1uOK";
+                    String apiKey = "g5AkSeLBbiQjfWUK45AhmNu6e07gvLlCxXCzov0ZeEzOYq1uOK";
 
-                String [] flowers = new String[] {"test_image.jpeg"};
+                    String[] flowers = new String[]{"test_image.jpeg"};
 
-                JSONObject data = new JSONObject();
-                try {
-                    data.put("api_key", apiKey);
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-                JSONArray images = new JSONArray();
-                for(String filename : flowers) {
-                    String fileData = null;
+                    ReadFile readFile = new ReadFile();
+                    String[] local_name_strings = new String[201];
                     try {
-                        fileData = base64EncodeFromFile();
-                    } catch (Exception e) {
+                        local_name_strings = readFile.main();
+                    } catch (IOException e) {
                         e.printStackTrace();
                     }
-                    images.put(fileData);
-                }
 
-                try {
-                    data.put("images", images);
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-
-                // add language
-                try {
-                    data.put("plant_language", "en");
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-
-                // add details
-                JSONArray plantDetails = new JSONArray()
-                        .put("common_names")
-                        .put("url")
-                        .put("name_authority");
-                try {
-                    data.put("plant_details", plantDetails);
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-                System.out.println(data);
-
-                String scientific_name = "";
-
-                try {
-                    scientific_name = new NetworkTask().execute(data).get();
-                } catch (ExecutionException e) {
-                    e.printStackTrace();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-
-                String[] idAndName = new String[2];
-                if(scientific_name.equals("network error")){
-                    Toast.makeText(getApplicationContext(),"네트워크에 에러가 있습니다. 확인해주세요", Toast.LENGTH_SHORT).show();
-                }
-                else if(!scientific_name.equals("not plant")){
+                    JSONObject data = new JSONObject();
                     try {
-                        idAndName = new NongSaroGardenListTask().execute(scientific_name).get();
-                    } catch (ExecutionException e) {
-                        e.printStackTrace();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                    for(int i = 0; i<idAndName.length; i++){
-                        System.out.println(idAndName[i]);
-                    }
-                }
-                else {
-                    Toast.makeText(getApplicationContext(),"식물이 아닙니다. 정확한 식물 사진을 넣어주세요.", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                JSONObject plantDetailData = new JSONObject();
-                if(idAndName[0].equals("noData")){
-                    Intent intent_goto_noinfo_page = new Intent(searchPlant.this, NoPlantinformationActivity.class);
-                    intent_goto_noinfo_page.putExtra("ScientificName", scientific_name);
-
-                    ImageView selected_Image_View = (ImageView)findViewById(R.id.cameraImageview);
-                    BitmapDrawable selected_image_drawable = (BitmapDrawable)selected_Image_View.getDrawable();
-                    Bitmap selected_image_bitmap = Bitmap.createScaledBitmap(selected_image_drawable.getBitmap(), 300, 400, true);
-                    ByteArrayOutputStream stream_change = new ByteArrayOutputStream();
-                    selected_image_bitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream_change);
-                    byte[] byteArray_result = stream_change.toByteArray();
-                    intent_goto_noinfo_page.putExtra("PlantImage",  byteArray_result);
-
-                    startActivity(intent_goto_noinfo_page);
-
-                    Toast.makeText(getApplicationContext(), "식물 정보가 없습니다.", Toast.LENGTH_SHORT).show();
-                    return;
-                }else if(idAndName[0].equals("listerror")){
-                    Toast.makeText(getApplicationContext(), "네트워크에 에러가 있습니다.", Toast.LENGTH_SHORT).show();
-                    return;
-                }else{
-                    try {
-                        plantDetailData = new NongSaroGardenDetailTask().execute(idAndName[0]).get();
-                    } catch (ExecutionException e) {
-                        e.printStackTrace();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                    try {
-                        plantDetailData.put("name", idAndName[1]);
+                        data.put("api_key", apiKey);
                     } catch (JSONException e) {
                         e.printStackTrace();
                     }
-                }
-
-                //show loading page
-                //customProgressDialog.show();
-
-                //----change page----//
-
-                Intent intent_goto_plantinformation_page = new Intent(searchPlant.this, PlantInformationActivity.class);
-
-                intent_goto_plantinformation_page.putExtra("plantDetailData", plantDetailData.toString());
-
-                //put Imageview image to intent
-                ImageView selected_Image_View = (ImageView)findViewById(R.id.cameraImageview);
-                BitmapDrawable selected_image_drawable = (BitmapDrawable)selected_Image_View.getDrawable();
-                Bitmap selected_image_bitmap = Bitmap.createScaledBitmap(selected_image_drawable.getBitmap(), 300, 400, true);
-                ByteArrayOutputStream stream_change = new ByteArrayOutputStream();
-                selected_image_bitmap.compress(Bitmap.CompressFormat.JPEG, 90, stream_change);
-                byte[] byteArray_result = stream_change.toByteArray();
-                intent_goto_plantinformation_page.putExtra("image_bitmap", byteArray_result);
-
-
-
-                Handler handler = new Handler();
-                handler.postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
-                        startActivity(intent_goto_plantinformation_page);
+                    JSONArray images = new JSONArray();
+                    for (String filename : flowers) {
+                        String fileData = null;
+                        try {
+                            //fileData = base64EncodeFromFile();
+                            fileData = test_base64(local_name_strings[q]);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                        images.put(fileData);
                     }
-                }, 3000);
 
-                return;
+                    try {
+                        data.put("images", images);
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+
+                    // add language
+                    try {
+                        data.put("plant_language", "en");
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+
+                    // add details
+                    JSONArray plantDetails = new JSONArray()
+                            .put("common_names")
+                            .put("url")
+                            .put("name_authority");
+                    try {
+                        data.put("plant_details", plantDetails);
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                    System.out.println(data);
+
+                    String scientific_name = "";
+
+
+                    try {
+                        //scientific_name = new NetworkTask().execute(data).get();
+                        test_json = new NetworkTask().execute(data).get();
+                       // test_json.put("testid", Integer.toString(q));
+                    } catch (ExecutionException e) {
+                        e.printStackTrace();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+
+                    try {
+                        scientific_name = test_json.get("scientific_name").toString();
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+
+                    String[] idAndName = new String[2];
+                    if (scientific_name.equals("network error")) {
+                        Toast.makeText(getApplicationContext(), "네트워크에 에러가 있습니다. 확인해주세요", Toast.LENGTH_SHORT).show();
+                    } else if (!scientific_name.equals("not plant")) {
+                        try {
+                            idAndName = new NongSaroGardenListTask().execute(scientific_name).get();
+                        } catch (ExecutionException e) {
+                            e.printStackTrace();
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                        for (int i = 0; i < idAndName.length; i++) {
+                            System.out.println(idAndName[i]);
+                        }
+
+                        //-----test------//
+                        try {
+                            test_json.put("korean_name", idAndName[1]);
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+
+                        plantDatas+=test_json.toString()+"\n";
+                        /*try {
+                            String str = new test_NetworkTask().execute(test_json).get();
+                        } catch (ExecutionException e) {
+                            e.printStackTrace();
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+
+                         */
+                        //---------------//
+                    } else {
+                        Toast.makeText(getApplicationContext(), "식물이 아닙니다. 정확한 식물 사진을 넣어주세요.", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    /*JSONObject plantDetailData = new JSONObject();
+                    if (idAndName[0].equals("noData")) {
+                        Intent intent_goto_noinfo_page = new Intent(searchPlant.this, NoPlantinformationActivity.class);
+                        intent_goto_noinfo_page.putExtra("ScientificName", scientific_name);
+
+                        ImageView selected_Image_View = (ImageView) findViewById(R.id.cameraImageview);
+                        BitmapDrawable selected_image_drawable = (BitmapDrawable) selected_Image_View.getDrawable();
+                        Bitmap selected_image_bitmap = Bitmap.createScaledBitmap(selected_image_drawable.getBitmap(), 300, 400, true);
+                        ByteArrayOutputStream stream_change = new ByteArrayOutputStream();
+                        selected_image_bitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream_change);
+                        byte[] byteArray_result = stream_change.toByteArray();
+                        intent_goto_noinfo_page.putExtra("PlantImage", byteArray_result);
+
+                        startActivity(intent_goto_noinfo_page);
+
+                        Toast.makeText(getApplicationContext(), "식물 정보가 없습니다.", Toast.LENGTH_SHORT).show();
+                        return;
+                    } else if (idAndName[0].equals("listerror")) {
+                        Toast.makeText(getApplicationContext(), "네트워크에 에러가 있습니다.", Toast.LENGTH_SHORT).show();
+                        return;
+                    } else {
+                        try {
+                            plantDetailData = new NongSaroGardenDetailTask().execute(idAndName[0]).get();
+                        } catch (ExecutionException e) {
+                            e.printStackTrace();
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                        try {
+                            plantDetailData.put("name", idAndName[1]);
+
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                    }
+
+                    //show loading page
+                    //customProgressDialog.show();
+
+                    //----change page----//
+
+                    Intent intent_goto_plantinformation_page = new Intent(searchPlant.this, PlantInformationActivity.class);
+
+                    intent_goto_plantinformation_page.putExtra("plantDetailData", plantDetailData.toString());
+
+                    //put Imageview image to intent
+                    ImageView selected_Image_View = (ImageView) findViewById(R.id.cameraImageview);
+                    BitmapDrawable selected_image_drawable = (BitmapDrawable) selected_Image_View.getDrawable();
+                    Bitmap selected_image_bitmap = Bitmap.createScaledBitmap(selected_image_drawable.getBitmap(), 300, 400, true);
+                    ByteArrayOutputStream stream_change = new ByteArrayOutputStream();
+                    selected_image_bitmap.compress(Bitmap.CompressFormat.JPEG, 90, stream_change);
+                    byte[] byteArray_result = stream_change.toByteArray();
+                    intent_goto_plantinformation_page.putExtra("image_bitmap", byteArray_result);
+
+
+                    Handler handler = new Handler();
+                    handler.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            //startActivity(intent_goto_plantinformation_page);
+                        }
+                    }, 3000);
+
+                     */
+                }
+                System.out.println(plantDatas);
             }
         });
 
@@ -355,6 +415,14 @@ public class searchPlant extends BottomNavigationActivity {
         rotate_image_Button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+
+                /*ReadFile readFile = new ReadFile();
+                try {
+                    readFile.parsing_name();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }*/
+
                 mDegree += 90;
                 ImageView rotate_ImageView = (ImageView)findViewById(R.id.cameraImageview);
                 BitmapDrawable drawable = (BitmapDrawable)rotate_ImageView.getDrawable();
@@ -364,6 +432,51 @@ public class searchPlant extends BottomNavigationActivity {
                 Toast.makeText(searchPlant.this, "이미지가 회전되었습니다.", Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+    public class ReadFile {
+        public String[] main() throws IOException {
+            String[] strings = new String[201];
+            AssetManager assetManager;
+            assetManager = getResources().getAssets();
+            InputStream is = null;
+            is = assetManager.open("sorted_names.txt");
+            BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+
+            String str;
+            int i = 1;
+            while ((str = reader.readLine()) != null) {
+                strings[i] = str;
+                i++;
+            }
+            reader.close();
+
+            /*for(int k = 0; k <= 200; k++) {
+                System.out.println("readFile " + k + "번째 !" + strings[k]);
+            }*/
+
+            return strings;
+        }
+        public String[] parsing_name() throws IOException {
+            String[] strings = new String[201];
+            AssetManager assetManager = getResources().getAssets();
+            InputStream is = assetManager.open("parse_name.txt");
+            BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+
+            String str;
+            int i = 1;
+            while ((str = reader.readLine()) != null) {
+                strings[i] = str;
+                i++;
+            }
+            reader.close();
+
+            /*for(int k = 0; k <= 200; k++) {
+                System.out.println("parsing name " + k + "번째 ??" + strings[k]);
+            }*/
+
+            return strings;
+        }
     }
 
     @Override
@@ -393,6 +506,32 @@ public class searchPlant extends BottomNavigationActivity {
 
         return imageString;
     }
+
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    private  String test_base64(String filename) throws Exception {
+
+        System.out.println("filename = " + filename);
+
+        InputStream inputStream = null;
+        try {
+            AssetManager assetManager = getResources().getAssets();
+            inputStream = assetManager.open("test_images/"+filename);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        BitmapDrawable drawable = (BitmapDrawable) Drawable.createFromStream(inputStream, null);
+        Bitmap bitmap = drawable.getBitmap();
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, baos);
+        byte[] imageBytes = baos.toByteArray();
+        String imageString = Base64.getEncoder().encodeToString(imageBytes);
+
+
+        return imageString;
+    }
+
     private File createImageFile() throws IOException {
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
         String imageFileName = "myPLANT_" + timeStamp + "_";
@@ -591,11 +730,69 @@ public class searchPlant extends BottomNavigationActivity {
     };
 }
 
-class NetworkTask extends AsyncTask<JSONObject, Void, String> {
+class test_NetworkTask extends AsyncTask<JSONObject, Void, String> {
+    private Exception exception;
+
+    protected String doInBackground(JSONObject... jsonObjects) {
+        try {
+            URL signup_url = new URL("http://18.116.203.236:1234/testplant");
+
+            HttpURLConnection conn = (HttpURLConnection) signup_url.openConnection();
+
+            conn.setDoInput(true);
+            conn.setDoOutput(true);
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            //conn.setRequestProperty("Cache-Control", "no-cache");
+
+            JSONObject jsonObject = jsonObjects[0];
+
+            OutputStream os = conn.getOutputStream();
+            os.write(jsonObject.toString().getBytes());
+            os.close();
+
+            int retCode = conn.getResponseCode();
+            System.out.println("retCode = " + retCode);
+            if (retCode == 200) {
+                System.out.println("add my plant OK");
+                /*InputStream is = conn.getInputStream();
+                BufferedReader br = new BufferedReader(new InputStreamReader(is));
+                String read_line;
+                StringBuffer response = new StringBuffer();
+                while ((read_line = br.readLine()) != null) {
+                    response.append(read_line);
+                    response.append("");
+                }
+                br.close();
+
+                String get_response = response.toString();
+                JSONObject json_response = new JSONObject(get_response);
+
+                String message = (String) json_response.get("plant");
+                System.out.println(message);*/
+            } else {
+                System.out.println("error");
+            }
+            conn.disconnect();
+        return "success";
+        } catch (MalformedURLException e) {
+            System.out.println("MalformedURLException");
+            e.printStackTrace();
+        } catch (SocketTimeoutException e) {
+            System.out.println("SocketTimeoutException");
+            e.printStackTrace();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return "fail";
+    }
+}
+
+class NetworkTask extends AsyncTask<JSONObject, Void, JSONObject> {
     private Exception exception;
 
     private String scientific_name = "not plant";
-    protected String doInBackground(JSONObject... data) {
+    protected JSONObject doInBackground(JSONObject... data) {
         try{
             URL url = new URL("https://api.plant.id/v2/identify");
             HttpURLConnection con = (HttpURLConnection) url.openConnection();
@@ -641,20 +838,36 @@ class NetworkTask extends AsyncTask<JSONObject, Void, String> {
             JSONObject firstSuggestions = suggestions.getJSONObject(0);
             String probabilityString = firstSuggestions.getString("probability");
             float probability = Float.parseFloat(probabilityString);
-            if(probability>0.5){
+
+            /*if(probability>0.5){
                 System.out.println("probability is bigger than 0.5");
                 JSONObject plant_details = firstSuggestions.getJSONObject("plant_details");
                 scientific_name = plant_details.getString("scientific_name");
                 System.out.println(scientific_name);
-
             }
             else{
                 System.out.println("probability is too low");
-            }
+            }*/
+
+            //----------test--------//
+            JSONObject plant_details = firstSuggestions.getJSONObject("plant_details");
+            scientific_name = plant_details.getString("scientific_name");
+            System.out.println(scientific_name);
+            //-------------------------//
+
             System.out.println(probability);
+
+            //-------------test---------//
+            JSONObject test_json = new JSONObject();
+            test_json.put("scientific_name", scientific_name);
+            test_json.put("probability", probability);
+
+            //--------------------------//
+
             is.close();
             con.disconnect();
-            return scientific_name;
+            //return scientific_name;
+            return test_json;
         } catch (ProtocolException e) {
             e.printStackTrace();
         } catch (MalformedURLException e) {
@@ -664,7 +877,15 @@ class NetworkTask extends AsyncTask<JSONObject, Void, String> {
         } catch (JSONException e) {
             e.printStackTrace();
         }
-        return "network error";
+        //return "network error";
+
+        JSONObject jsonObject = new JSONObject();
+        try {
+            jsonObject.put("scientific_name", "network error");
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        return jsonObject;
 
 
     }
